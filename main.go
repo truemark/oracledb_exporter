@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/go-kit/log"
 	"net/http"
 	"os"
 
@@ -97,6 +98,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("<html><head><title>Oracle DB Exporter " + Version + "</title></head><body><h1>Oracle DB Exporter " + Version + "</h1><p><a href='" + *metricPath + "'>Metrics</a></p></body></html>"))
 	})
+	http.HandleFunc("/scrape", scrapeHandle(logger))
 
 	server := &http.Server{}
 	if err := web.ListenAndServe(server, toolkitFlags, logger); err != nil {
@@ -111,4 +113,34 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func scrapeHandle(logger log.Logger) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		target := r.URL.Query().Get("target")
+		level.Info(logger).Log("msg", "message", "reason", target)
+		config := &collector.Config{
+			DSN:                r.URL.Query().Get("target"),
+			MaxOpenConns:       *maxOpenConns,
+			MaxIdleConns:       *maxIdleConns,
+			CustomMetrics:      *customMetrics,
+			QueryTimeout:       *queryTimeout,
+			DefaultMetricsFile: *defaultFileMetrics,
+		}
+		level.Error(logger).Log("msg", "Listening error", "reason", config.DSN)
+		exporter, err := collector.NewExporter(logger, config)
+		if err != nil {
+			level.Error(logger).Log("unable to connect to DB", err)
+		}
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(exporter)
+		gatherers := prometheus.Gatherers{
+			prometheus.DefaultGatherer,
+			registry,
+		}
+		h := promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{
+			ErrorHandling: promhttp.ContinueOnError,
+		})
+		h.ServeHTTP(w, r)
+	}
 }
