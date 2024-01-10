@@ -117,8 +117,6 @@ func getEnv(key, fallback string) string {
 
 func scrapeHandle(logger log.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		target := r.URL.Query().Get("target")
-		level.Info(logger).Log("msg", "message", "reason", target)
 		config := &collector.Config{
 			DSN:                r.URL.Query().Get("target"),
 			MaxOpenConns:       *maxOpenConns,
@@ -127,7 +125,6 @@ func scrapeHandle(logger log.Logger) func(w http.ResponseWriter, r *http.Request
 			QueryTimeout:       *queryTimeout,
 			DefaultMetricsFile: *defaultFileMetrics,
 		}
-		level.Error(logger).Log("msg", "Listening error", "reason", config.DSN)
 		exporter, err := collector.NewExporter(logger, config)
 		if err != nil {
 			level.Error(logger).Log("unable to connect to DB", err)
