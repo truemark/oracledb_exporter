@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/go-kit/log"
 	"net/http"
 	"os"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 
+	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 
 	// Required for debugging
