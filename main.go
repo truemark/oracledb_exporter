@@ -96,7 +96,7 @@ func main() {
 	}
 	http.Handle(*metricPath, promhttp.HandlerFor(prometheus.DefaultGatherer, opts))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("<html><head><title>Oracle DB Exporter " + Version + "</title></head><body><h1>Oracle DB Exporter " + Version + "</h1><p><a href='" + *metricPath + "'>Metrics</a></p></body></html>"))
+		w.Write([]byte("<html><head><title>Oracle DB Exporter " + Version + "</title></head><body><h1>Oracle DB Exporter " + Version + "</h1><p><a href='" + *metricPath + "'>Metrics</a></p> <p>To use the multi-target functionality, send a http request to the endpoint <b>/scrape?target=foo:1521</b> where target is set to the DSN of the Oracle instance to scrape metrics from.</p></body></html>"))
 	})
 	http.HandleFunc("/scrape", scrapeHandle(logger))
 
