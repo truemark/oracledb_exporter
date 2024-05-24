@@ -1,6 +1,6 @@
 ARG BASE_IMAGE
 # Build is starting here
-FROM docker.io/library/golang:1.19 AS build
+FROM docker.io/library/golang:1.22 AS build
 
 WORKDIR /go/src/oracledb_exporter
 COPY . .
@@ -9,7 +9,10 @@ RUN go get -d -v
 ARG VERSION
 ENV VERSION ${VERSION:-0.1.0}
 
-RUN GOOS=linux GOARCH=amd64 go build -v -ldflags "-X main.Version=${VERSION} -s -w"
+ARG CGO_ENABLED
+ENV CGO_ENABLED ${CGO_ENABLED:-1}
+
+RUN CGO_ENABLED=${CGO_ENABLED} GOOS=linux GOARCH=amd64 go build -v -ldflags "-X main.Version=${VERSION} -s -w"
 
 FROM ${BASE_IMAGE} as exporter
 LABEL org.opencontainers.image.authors="Seth Miller,Yannig Perré <yannig.perre@gmail.com>"

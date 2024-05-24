@@ -3,7 +3,7 @@ OS_TYPE        ?= $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH_TYPE      ?= $(subst x86_64,amd64,$(patsubst i%86,386,$(ARCH)))
 GOOS           ?= $(shell go env GOOS)
 GOARCH         ?= $(shell go env GOARCH)
-VERSION        ?= 0.5.2
+VERSION        ?= 0.6.0
 LDFLAGS        := -X main.Version=$(VERSION)
 GOFLAGS        := -ldflags "$(LDFLAGS) -s -w"
 BUILD_ARGS      = --build-arg VERSION=$(VERSION)
@@ -23,9 +23,10 @@ IMAGE_ID       ?= $(IMAGE_NAME):$(VERSION)
 IMAGE_ID_LATEST?= $(IMAGE_NAME):latest
 RELEASE        ?= true
 
-UBUNTU_BASE_IMAGE       ?= docker.io/library/ubuntu:23.04
-ORACLE_LINUX_BASE_IMAGE ?= docker.io/library/oraclelinux:8-slim
-ALPINE_BASE_IMAGE       ?= docker.io/library/alpine:3.17
+UBUNTU_BASE_IMAGE       ?= docker.io/library/ubuntu:24.04
+ORACLE_LINUX_BASE_IMAGE ?= docker.io/library/oraclelinux:9-slim
+ALPINE_BASE_IMAGE       ?= docker.io/library/alpine:3.19
+SCRATCH_BASE_IMAGE      ?= scratch
 
 ifeq ($(GOOS), windows)
 EXT?=.exe
@@ -92,12 +93,13 @@ go-test:
 clean:
 	rm -rf ./dist sgerrand.rsa.pub glibc-*.apk oracle-*.rpm
 
-docker: ubuntu-image alpine-image oraclelinux-image
+docker: ubuntu-image alpine-image oraclelinux-image scratch-image
 
 push-images:
 	@make --no-print-directory push-ubuntu-image
 	@make --no-print-directory push-oraclelinux-image
 	@make --no-print-directory push-alpine-image
+	@make --no-print-directory push-scratch-image
 
 oraclelinux-image:
 	if DOCKER_CLI_EXPERIMENTAL=enabled $(DOCKER_CMD) manifest inspect "$(IMAGE_ID)-oraclelinux" > /dev/null; then \
@@ -164,6 +166,28 @@ endif
 sign-alpine-image:
 ifneq ("$(wildcard cosign.key)","")
 	cosign sign --key cosign.key $(IMAGE_ID)-alpine
+else
+	@echo "Can't find cosign.key file"
+endif
+
+scratch-image:
+	if DOCKER_CLI_EXPERIMENTAL=enabled $(DOCKER_CMD) manifest inspect "$(IMAGE_ID)-scratch" > /dev/null; then \
+		echo "Image \"$(IMAGE_ID)-scratch\" already exists on ghcr.io"; \
+	else \
+		$(DOCKER_CMD) build --progress=plain $(BUILD_ARGS) -t "$(IMAGE_ID)-scratch" --build-arg BASE_IMAGE=$(SCRATCH_BASE_IMAGE) --build-arg CGO_ENABLED=0 . && \
+		$(DOCKER_CMD) build --progress=plain $(BUILD_ARGS) $(LEGACY_TABLESPACE) --build-arg BASE_IMAGE=$(SCRATCH_BASE_IMAGE) --build-arg CGO_ENABLED=0 -t "$(IMAGE_ID)-scratch_legacy-tablespace" . && \
+		$(DOCKER_CMD) tag "$(IMAGE_ID)-scratch" "$(IMAGE_NAME):scratch"; \
+	fi
+
+push-scratch-image:
+	$(DOCKER_CMD) push $(IMAGE_ID)-scratch
+ifeq ("$(RELEASE)", "true")
+	$(DOCKER_CMD) push "$(IMAGE_NAME):scratch"
+endif
+
+sign-scratch-image:
+ifneq ("$(wildcard cosign.key)","")
+	cosign sign --key cosign.key $(IMAGE_ID)-scratch
 else
 	@echo "Can't find cosign.key file"
 endif
