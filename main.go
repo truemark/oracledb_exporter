@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"net/http"
-	"os"
-
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"net/http"
+	"net/url"
+	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -100,6 +100,8 @@ func main() {
 		go exporter.RunScheduledScrapes(ctx, *scrapeInterval)
 	}
 
+	prometheus.Unregister(prometheus.NewGoCollector())
+	prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	prometheus.MustRegister(exporter)
 	prometheus.MustRegister(collectors.NewBuildInfoCollector())
 
@@ -131,6 +133,14 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+func extractDBURL(dsn string) string {
+	parsedURL, err := url.Parse(dsn)
+	if err != nil {
+		return ""
+	}
+	return parsedURL.Host
+}
+
 func scrapeHandle(logger log.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		config := &collector.Config{
@@ -141,12 +151,16 @@ func scrapeHandle(logger log.Logger) func(w http.ResponseWriter, r *http.Request
 			QueryTimeout:       *queryTimeout,
 			DefaultMetricsFile: *defaultFileMetrics,
 		}
+		dbURL := extractDBURL(config.DSN)
+		labels := prometheus.Labels{"databaseIdentifier": dbURL}
 		exporter, err := collector.NewExporter(logger, config)
 		if err != nil {
 			level.Error(logger).Log("unable to connect to DB", err)
 		}
 		registry := prometheus.NewRegistry()
-		registry.MustRegister(exporter)
+		wrappedRegistry := prometheus.WrapRegistererWith(labels, registry)
+		wrappedRegistry.MustRegister(exporter)
+		//registry.MustRegister(exporter)
 		gatherers := prometheus.Gatherers{
 			prometheus.DefaultGatherer,
 			registry,
